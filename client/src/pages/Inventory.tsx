@@ -133,9 +133,9 @@ export default function Inventory() {
             
             <div className="w-full sm:w-auto flex items-end">
               <Button variant="outline" className="mb-0 sm:mb-1" onClick={() => {
-                setLocationId('');
-                setCategory('');
-                setStatus('');
+                setLocationId('all');
+                setCategory('all');
+                setStatus('all');
               }}>
                 <Filter className="mr-2 h-4 w-4" />
                 Reset Filters

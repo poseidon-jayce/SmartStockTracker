@@ -29,8 +29,8 @@ import { Download, Filter, TrendingUp, Package, RefreshCw } from 'lucide-react';
 
 export default function SalesAnalysis() {
   const [period, setPeriod] = useState('30');
-  const [locationId, setLocationId] = useState<string>('');
-  const [productId, setProductId] = useState<string>('');
+  const [locationId, setLocationId] = useState<string>('all');
+  const [productId, setProductId] = useState<string>('all');
   const [chartType, setChartType] = useState<'line' | 'bar'>('line');
   
   const { data: locations } = useQuery({
@@ -154,7 +154,7 @@ export default function SalesAnalysis() {
                   <SelectValue placeholder="All Locations" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">All Locations</SelectItem>
+                  <SelectItem value="all">All Locations</SelectItem>
                   {locations?.map((location: any) => (
                     <SelectItem key={location.id} value={location.id.toString()}>
                       {location.name}
@@ -197,8 +197,8 @@ export default function SalesAnalysis() {
             <div className="w-full sm:w-auto flex items-end">
               <Button variant="outline" className="mb-0 sm:mb-1" onClick={() => {
                 setPeriod('30');
-                setLocationId('');
-                setProductId('');
+                setLocationId('all');
+                setProductId('all');
                 setChartType('line');
               }}>
                 <Filter className="mr-2 h-4 w-4" />
