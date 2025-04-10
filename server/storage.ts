@@ -75,6 +75,7 @@ export interface IStorage {
   
   // Supplier Orders
   getSupplierOrders(supplierId?: number): Promise<SupplierOrder[]>;
+  getSupplierOrder(id: number): Promise<SupplierOrder | undefined>;
   createSupplierOrder(order: InsertSupplierOrder): Promise<SupplierOrder>;
   updateSupplierOrder(id: number, order: Partial<InsertSupplierOrder>): Promise<SupplierOrder | undefined>;
   
@@ -811,6 +812,10 @@ export class MemStorage implements IStorage {
       return allOrders.filter(order => order.supplierId === supplierId);
     }
     return allOrders;
+  }
+  
+  async getSupplierOrder(id: number): Promise<SupplierOrder | undefined> {
+    return this.supplierOrders.get(id);
   }
   
   async createSupplierOrder(order: InsertSupplierOrder): Promise<SupplierOrder> {
