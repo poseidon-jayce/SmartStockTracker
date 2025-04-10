@@ -125,68 +125,92 @@ export class MemStorage implements IStorage {
     this.sales = new Map();
     this.predictions = new Map();
     
+    // Initialize data directly
     this.initializeData();
   }
   
   private initializeData() {
-    // Create default user
-    this.createUser({
+    // Create default user directly (not using async methods)
+    const adminId = this.userId++;
+    const admin: User = {
+      id: adminId,
       username: 'admin',
       password: 'admin123',
       fullName: 'John Doe',
       role: 'admin',
       locationId: null
-    });
+    };
+    this.users.set(adminId, admin);
     
-    // Create default locations
-    const warehouseA = this.createLocation({
+    // Create default locations directly
+    const warehouseAId = this.locationId++;
+    const warehouseA: Location = {
+      id: warehouseAId,
       name: 'Warehouse A',
       address: '123 Main St, Warehouse District',
       type: 'warehouse'
-    });
+    };
+    this.locations.set(warehouseAId, warehouseA);
     
-    const store1 = this.createLocation({
+    const store1Id = this.locationId++;
+    const store1: Location = {
+      id: store1Id,
       name: 'Store 1',
       address: '456 Retail Ave, Shopping Mall',
       type: 'store'
-    });
+    };
+    this.locations.set(store1Id, store1);
     
-    const store2 = this.createLocation({
+    const store2Id = this.locationId++;
+    const store2: Location = {
+      id: store2Id,
       name: 'Store 2',
       address: '789 Commerce Blvd, Downtown',
       type: 'store'
-    });
+    };
+    this.locations.set(store2Id, store2);
     
-    // Create default suppliers
-    const techDistributors = this.createSupplier({
+    // Create default suppliers directly
+    const techDistributorsId = this.supplierId++;
+    const techDistributors: Supplier = {
+      id: techDistributorsId,
       name: 'Tech Distributors Inc.',
       contactName: 'Sarah Johnson',
       email: 'sjohnson@techdist.example',
       phone: '555-123-4567',
       address: '100 Supplier Road, Tech Park',
       active: true
-    });
+    };
+    this.suppliers.set(techDistributorsId, techDistributors);
     
-    const globalGadget = this.createSupplier({
+    const globalGadgetId = this.supplierId++;
+    const globalGadget: Supplier = {
+      id: globalGadgetId,
       name: 'Global Gadget Supply',
       contactName: 'Mike Williams',
       email: 'mike@globalgadget.example',
       phone: '555-987-6543',
       address: '200 Import Street, Harbor District',
       active: true
-    });
+    };
+    this.suppliers.set(globalGadgetId, globalGadget);
     
-    const electronicsWholesale = this.createSupplier({
+    const electronicsWholesaleId = this.supplierId++;
+    const electronicsWholesale: Supplier = {
+      id: electronicsWholesaleId,
       name: 'Electronics Wholesale',
       contactName: 'Emma Taylor',
       email: 'etaylor@ewholesale.example',
       phone: '555-456-7890',
       address: '300 Bulk Avenue, Industrial Zone',
       active: true
-    });
+    };
+    this.suppliers.set(electronicsWholesaleId, electronicsWholesale);
     
-    // Create products
-    const headphones = this.createProduct({
+    // Create products directly
+    const headphonesId = this.productId++;
+    const headphones: Product = {
+      id: headphonesId,
       name: 'Premium Wireless Headphones',
       sku: 'WH-1000XM5',
       barcode: '1234567890123',
@@ -195,9 +219,12 @@ export class MemStorage implements IStorage {
       unitPrice: 299.99,
       reorderPoint: 15,
       imageUrl: null
-    });
+    };
+    this.products.set(headphonesId, headphones);
     
-    const smarthub = this.createProduct({
+    const smarthubId = this.productId++;
+    const smarthub: Product = {
+      id: smarthubId,
       name: 'Smart Home Hub',
       sku: 'SHH-200',
       barcode: '2345678901234',
@@ -206,9 +233,12 @@ export class MemStorage implements IStorage {
       unitPrice: 129.99,
       reorderPoint: 10,
       imageUrl: null
-    });
+    };
+    this.products.set(smarthubId, smarthub);
     
-    const camera = this.createProduct({
+    const cameraId = this.productId++;
+    const camera: Product = {
+      id: cameraId,
       name: '4K Action Camera',
       sku: 'AC-4K-PRO',
       barcode: '3456789012345',
@@ -217,9 +247,12 @@ export class MemStorage implements IStorage {
       unitPrice: 249.99,
       reorderPoint: 8,
       imageUrl: null
-    });
+    };
+    this.products.set(cameraId, camera);
     
-    const watch = this.createProduct({
+    const watchId = this.productId++;
+    const watch: Product = {
+      id: watchId,
       name: 'Fitness Tracker Watch',
       sku: 'FTW-350',
       barcode: '4567890123456',
@@ -228,9 +261,12 @@ export class MemStorage implements IStorage {
       unitPrice: 89.99,
       reorderPoint: 20,
       imageUrl: null
-    });
+    };
+    this.products.set(watchId, watch);
     
-    const tablet = this.createProduct({
+    const tabletId = this.productId++;
+    const tablet: Product = {
+      id: tabletId,
       name: 'Tablet Pro 11"',
       sku: 'TP-11-2023',
       barcode: '5678901234567',
@@ -239,74 +275,110 @@ export class MemStorage implements IStorage {
       unitPrice: 499.99,
       reorderPoint: 15,
       imageUrl: null
-    });
+    };
+    this.products.set(tabletId, tablet);
     
-    // Create inventory
-    this.createInventory({
+    // Create inventory directly
+    const inv1Id = this.inventoryId++;
+    const inv1: Inventory = {
+      id: inv1Id,
       productId: headphones.id,
       locationId: warehouseA.id,
-      quantity: 5
-    });
+      quantity: 5,
+      lastUpdated: new Date()
+    };
+    this.inventory.set(inv1Id, inv1);
     
-    this.createInventory({
+    const inv2Id = this.inventoryId++;
+    const inv2: Inventory = {
+      id: inv2Id,
       productId: smarthub.id,
       locationId: warehouseA.id,
-      quantity: 12
-    });
+      quantity: 12,
+      lastUpdated: new Date()
+    };
+    this.inventory.set(inv2Id, inv2);
     
-    this.createInventory({
+    const inv3Id = this.inventoryId++;
+    const inv3: Inventory = {
+      id: inv3Id,
       productId: camera.id,
       locationId: warehouseA.id,
-      quantity: 3
-    });
+      quantity: 3,
+      lastUpdated: new Date()
+    };
+    this.inventory.set(inv3Id, inv3);
     
-    this.createInventory({
+    const inv4Id = this.inventoryId++;
+    const inv4: Inventory = {
+      id: inv4Id,
       productId: watch.id,
       locationId: warehouseA.id,
-      quantity: 45
-    });
+      quantity: 45,
+      lastUpdated: new Date()
+    };
+    this.inventory.set(inv4Id, inv4);
     
-    this.createInventory({
+    const inv5Id = this.inventoryId++;
+    const inv5: Inventory = {
+      id: inv5Id,
       productId: tablet.id,
       locationId: warehouseA.id,
-      quantity: 22
-    });
+      quantity: 22,
+      lastUpdated: new Date()
+    };
+    this.inventory.set(inv5Id, inv5);
     
-    // Create supplier products
-    this.createSupplierProduct({
+    // Create supplier products directly
+    const sp1Id = this.supplierProductId++;
+    const sp1: SupplierProduct = {
+      id: sp1Id,
       supplierId: techDistributors.id,
       productId: headphones.id,
       leadTime: 7,
       unitCost: 199.99
-    });
+    };
+    this.supplierProducts.set(sp1Id, sp1);
     
-    this.createSupplierProduct({
+    const sp2Id = this.supplierProductId++;
+    const sp2: SupplierProduct = {
+      id: sp2Id,
       supplierId: techDistributors.id,
       productId: smarthub.id,
       leadTime: 5,
       unitCost: 79.99
-    });
+    };
+    this.supplierProducts.set(sp2Id, sp2);
     
-    this.createSupplierProduct({
+    const sp3Id = this.supplierProductId++;
+    const sp3: SupplierProduct = {
+      id: sp3Id,
       supplierId: globalGadget.id,
       productId: camera.id,
       leadTime: 10,
       unitCost: 159.99
-    });
+    };
+    this.supplierProducts.set(sp3Id, sp3);
     
-    this.createSupplierProduct({
+    const sp4Id = this.supplierProductId++;
+    const sp4: SupplierProduct = {
+      id: sp4Id,
       supplierId: electronicsWholesale.id,
       productId: watch.id,
       leadTime: 3,
       unitCost: 49.99
-    });
+    };
+    this.supplierProducts.set(sp4Id, sp4);
     
-    this.createSupplierProduct({
+    const sp5Id = this.supplierProductId++;
+    const sp5: SupplierProduct = {
+      id: sp5Id,
       supplierId: electronicsWholesale.id,
       productId: tablet.id,
       leadTime: 7,
       unitCost: 349.99
-    });
+    };
+    this.supplierProducts.set(sp5Id, sp5);
     
     // Create sales (for trend data)
     const today = new Date();
@@ -418,30 +490,42 @@ export class MemStorage implements IStorage {
       }
     }
     
-    // Create initial predictions
-    this.createPrediction({
+    // Create initial predictions directly
+    const pred1Id = this.predictionId++;
+    const pred1: Prediction = {
+      id: pred1Id,
       productId: headphones.id,
       locationId: warehouseA.id,
       predictedDemand: 30,
       confidence: 0.82,
-      period: '30days'
-    });
+      period: '30days',
+      generatedAt: new Date()
+    };
+    this.predictions.set(pred1Id, pred1);
     
-    this.createPrediction({
+    const pred2Id = this.predictionId++;
+    const pred2: Prediction = {
+      id: pred2Id,
       productId: smarthub.id,
       locationId: warehouseA.id,
       predictedDemand: 28,
       confidence: 0.75,
-      period: '30days'
-    });
+      period: '30days',
+      generatedAt: new Date()
+    };
+    this.predictions.set(pred2Id, pred2);
     
-    this.createPrediction({
+    const pred3Id = this.predictionId++;
+    const pred3: Prediction = {
+      id: pred3Id,
       productId: camera.id,
       locationId: warehouseA.id,
       predictedDemand: 18,
       confidence: 0.68,
-      period: '30days'
-    });
+      period: '30days',
+      generatedAt: new Date()
+    };
+    this.predictions.set(pred3Id, pred3);
     
     // Create supplier orders
     const pendingOrder = this.createSupplierOrder({
