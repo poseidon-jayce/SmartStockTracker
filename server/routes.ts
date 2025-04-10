@@ -8,7 +8,12 @@ import {
   insertSupplierSchema, 
   insertSupplierOrderSchema,
   insertOrderItemSchema,
-  insertSalesSchema
+  insertSalesSchema,
+  // New schemas for the additional features
+  insertInvoiceSchema,
+  insertInvoiceItemSchema,
+  insertPriceRevaluationSchema,
+  insertPaymentSchema
 } from "@shared/schema";
 import { predictDemand, analyzeInventory } from "./lib/openai";
 
@@ -435,6 +440,226 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(recommendations);
     } catch (error) {
       res.status(500).json({ message: "Error analyzing inventory", error });
+    }
+  });
+
+  // ******* Invoice Management Routes *******
+  
+  app.get("/api/invoices", async (req: Request, res: Response) => {
+    try {
+      const status = req.query.status as string | undefined;
+      
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+      
+      if (req.query.startDate) {
+        startDate = new Date(req.query.startDate as string);
+      }
+      
+      if (req.query.endDate) {
+        endDate = new Date(req.query.endDate as string);
+      }
+      
+      const invoices = await storage.getInvoices(status, startDate, endDate);
+      res.json(invoices);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching invoices", error });
+    }
+  });
+  
+  app.get("/api/invoices/:id", async (req: Request, res: Response) => {
+    const invoiceId = parseInt(req.params.id);
+    if (isNaN(invoiceId)) {
+      return res.status(400).json({ message: "Invalid invoice ID" });
+    }
+    
+    try {
+      const invoice = await storage.getInvoiceWithItems(invoiceId);
+      if (!invoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      res.json(invoice);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching invoice", error });
+    }
+  });
+  
+  app.post("/api/invoices", async (req: Request, res: Response) => {
+    try {
+      const { invoice, items } = req.body;
+      
+      if (!invoice || !items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: "Invalid invoice data. Both invoice and items are required." });
+      }
+      
+      const validatedInvoice = insertInvoiceSchema.parse(invoice);
+      const newInvoice = await storage.createInvoice(validatedInvoice);
+      
+      const invoiceItems = await Promise.all(items.map(async (item) => {
+        const validatedItem = insertInvoiceItemSchema.parse({
+          ...item,
+          invoiceId: newInvoice.id
+        });
+        return await storage.createInvoiceItem(validatedItem);
+      }));
+      
+      res.status(201).json({ 
+        invoice: newInvoice, 
+        items: invoiceItems 
+      });
+    } catch (error) {
+      res.status(400).json({ message: "Invalid invoice data", error });
+    }
+  });
+  
+  app.put("/api/invoices/:id", async (req: Request, res: Response) => {
+    const invoiceId = parseInt(req.params.id);
+    if (isNaN(invoiceId)) {
+      return res.status(400).json({ message: "Invalid invoice ID" });
+    }
+    
+    try {
+      const validatedData = insertInvoiceSchema.partial().parse(req.body);
+      const updatedInvoice = await storage.updateInvoice(invoiceId, validatedData);
+      
+      if (!updatedInvoice) {
+        return res.status(404).json({ message: "Invoice not found" });
+      }
+      
+      res.json(updatedInvoice);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid invoice data", error });
+    }
+  });
+  
+  // GST Calculation
+  app.post("/api/calculate-gst", async (req: Request, res: Response) => {
+    try {
+      const { unitPrice, quantity, gstRate, isInterState } = req.body;
+      
+      if (!unitPrice || !quantity || !gstRate) {
+        return res.status(400).json({ message: "Required fields: unitPrice, quantity, gstRate" });
+      }
+      
+      const gstCalculation = await storage.calculateGstForItem(
+        parseFloat(unitPrice),
+        parseInt(quantity),
+        parseFloat(gstRate),
+        !!isInterState
+      );
+      
+      res.json(gstCalculation);
+    } catch (error) {
+      res.status(500).json({ message: "Error calculating GST", error });
+    }
+  });
+  
+  app.get("/api/gst-summary", async (req: Request, res: Response) => {
+    try {
+      const today = new Date();
+      const month = req.query.month ? parseInt(req.query.month as string) : today.getMonth() + 1;
+      const year = req.query.year ? parseInt(req.query.year as string) : today.getFullYear();
+      
+      const gstSummary = await storage.getGstSummary(month, year);
+      res.json(gstSummary);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching GST summary", error });
+    }
+  });
+  
+  // ******* Price Revaluation Routes *******
+  
+  app.get("/api/price-revaluations", async (req: Request, res: Response) => {
+    try {
+      const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
+      
+      let startDate: Date | undefined;
+      let endDate: Date | undefined;
+      
+      if (req.query.startDate) {
+        startDate = new Date(req.query.startDate as string);
+      }
+      
+      if (req.query.endDate) {
+        endDate = new Date(req.query.endDate as string);
+      }
+      
+      const revaluations = await storage.getPriceRevaluations(productId, startDate, endDate);
+      res.json(revaluations);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching price revaluations", error });
+    }
+  });
+  
+  app.post("/api/price-revaluations", async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertPriceRevaluationSchema.parse(req.body);
+      
+      // Check if the product exists
+      const product = await storage.getProduct(validatedData.productId);
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
+      
+      // Create the revaluation
+      const revaluation = await storage.createPriceRevaluation({
+        ...validatedData,
+        oldPrice: product.unitPrice // Current price becomes old price
+      });
+      
+      res.status(201).json(revaluation);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid price revaluation data", error });
+    }
+  });
+  
+  // ******* Payment Tracking Routes *******
+  
+  app.get("/api/payments", async (req: Request, res: Response) => {
+    try {
+      const entityType = req.query.entityType as string | undefined;
+      const status = req.query.status as string | undefined;
+      
+      const payments = await storage.getPayments(entityType, status);
+      res.json(payments);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching payments", error });
+    }
+  });
+  
+  app.post("/api/payments", async (req: Request, res: Response) => {
+    try {
+      const validatedData = insertPaymentSchema.parse(req.body);
+      
+      // Validate that the entity exists
+      if (validatedData.entityType === 'invoice') {
+        const invoice = await storage.getInvoice(validatedData.entityId);
+        if (!invoice) {
+          return res.status(404).json({ message: "Invoice not found" });
+        }
+      } else if (validatedData.entityType === 'supplierOrder') {
+        const order = await storage.getSupplierOrder(validatedData.entityId);
+        if (!order) {
+          return res.status(404).json({ message: "Supplier order not found" });
+        }
+      } else {
+        return res.status(400).json({ message: "Invalid entity type. Must be 'invoice' or 'supplierOrder'" });
+      }
+      
+      const payment = await storage.createPayment(validatedData);
+      res.status(201).json(payment);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid payment data", error });
+    }
+  });
+  
+  app.get("/api/payment-summary", async (req: Request, res: Response) => {
+    try {
+      const summary = await storage.getPaymentSummary();
+      res.json(summary);
+    } catch (error) {
+      res.status(500).json({ message: "Error fetching payment summary", error });
     }
   });
 

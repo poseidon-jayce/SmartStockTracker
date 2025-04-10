@@ -90,6 +90,25 @@ export interface IStorage {
   getPredictions(productId?: number, locationId?: number): Promise<Prediction[]>;
   createPrediction(prediction: InsertPrediction): Promise<Prediction>;
   
+  // Invoices - New for GST tax calculation and invoice printing
+  getInvoices(status?: string, startDate?: Date, endDate?: Date): Promise<Invoice[]>;
+  getInvoice(id: number): Promise<Invoice | undefined>;
+  createInvoice(invoice: InsertInvoice): Promise<Invoice>;
+  updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined>;
+  
+  // Invoice Items - New for GST tax calculation
+  getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]>;
+  createInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem>;
+  
+  // Price Revaluations - New for price fluctuations
+  getPriceRevaluations(productId?: number, startDate?: Date, endDate?: Date): Promise<PriceRevaluation[]>;
+  createPriceRevaluation(revaluation: InsertPriceRevaluation): Promise<PriceRevaluation>;
+  
+  // Payments - New for payment tracking
+  getPayments(entityType?: string, status?: string): Promise<Payment[]>;
+  createPayment(payment: InsertPayment): Promise<Payment>;
+  updatePayment(id: number, payment: Partial<InsertPayment>): Promise<Payment | undefined>;
+
   // Composite operations
   getInventoryWithProducts(locationId?: number): Promise<ProductWithInventory[]>;
   getPredictionsWithProducts(locationId?: number): Promise<PredictionWithProduct[]>;
@@ -99,6 +118,18 @@ export interface IStorage {
     lowStockCount: number;
     pendingOrders: number;
     activeSuppliers: number;
+  }>;
+  
+  // New composite operations
+  getInvoiceWithItems(invoiceId: number): Promise<InvoiceWithItems | undefined>;
+  getPaymentSummary(): Promise<PaymentSummary>;
+  getGstSummary(month: number, year: number): Promise<GstSummary>;
+  calculateGstForItem(unitPrice: number, quantity: number, gstRate: number, isInterState: boolean): Promise<{
+    subtotal: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    total: number;
   }>;
 }
 
@@ -113,6 +144,11 @@ export class MemStorage implements IStorage {
   private orderItems: Map<number, OrderItem>;
   private sales: Map<number, Sale>;
   private predictions: Map<number, Prediction>;
+  // New storage maps for the requested features
+  private invoices: Map<number, Invoice>;
+  private invoiceItems: Map<number, InvoiceItem>;
+  private priceRevaluations: Map<number, PriceRevaluation>;
+  private payments: Map<number, Payment>;
   
   private userId: number = 1;
   private productId: number = 1;
@@ -124,6 +160,11 @@ export class MemStorage implements IStorage {
   private orderItemId: number = 1;
   private saleId: number = 1;
   private predictionId: number = 1;
+  // New IDs for the requested features
+  private invoiceId: number = 1;
+  private invoiceItemId: number = 1;
+  private priceRevaluationId: number = 1;
+  private paymentId: number = 1;
   
   constructor() {
     this.users = new Map();
@@ -136,6 +177,11 @@ export class MemStorage implements IStorage {
     this.orderItems = new Map();
     this.sales = new Map();
     this.predictions = new Map();
+    // Initialize new maps for additional features
+    this.invoices = new Map();
+    this.invoiceItems = new Map();
+    this.priceRevaluations = new Map();
+    this.payments = new Map();
     
     // Initialize data directly
     this.initializeData();
@@ -1068,6 +1114,437 @@ export class MemStorage implements IStorage {
         activeSuppliers: 0
       };
     }
+  }
+
+  // ***** New methods for Invoice Management *****
+
+  async getInvoices(status?: string, startDate?: Date, endDate?: Date): Promise<Invoice[]> {
+    let invoices = Array.from(this.invoices.values());
+    
+    if (status) {
+      invoices = invoices.filter(invoice => invoice.status === status);
+    }
+    
+    if (startDate) {
+      invoices = invoices.filter(invoice => invoice.invoiceDate >= startDate);
+    }
+    
+    if (endDate) {
+      invoices = invoices.filter(invoice => invoice.invoiceDate <= endDate);
+    }
+    
+    return invoices;
+  }
+
+  async getInvoice(id: number): Promise<Invoice | undefined> {
+    return this.invoices.get(id);
+  }
+
+  async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
+    const id = this.invoiceId++;
+    const newInvoice: Invoice = {
+      id,
+      invoiceNumber: invoice.invoiceNumber,
+      customerName: invoice.customerName,
+      customerAddress: invoice.customerAddress || null,
+      customerGstin: invoice.customerGstin || null,
+      customerStateCode: invoice.customerStateCode || null,
+      invoiceDate: new Date(),
+      dueDate: invoice.dueDate || null,
+      locationId: invoice.locationId,
+      subtotal: invoice.subtotal,
+      cgstAmount: invoice.cgstAmount || 0,
+      sgstAmount: invoice.sgstAmount || 0,
+      igstAmount: invoice.igstAmount || 0,
+      totalAmount: invoice.totalAmount,
+      status: invoice.status || 'unpaid',
+      notes: invoice.notes || null
+    };
+    
+    this.invoices.set(id, newInvoice);
+    return newInvoice;
+  }
+
+  async updateInvoice(id: number, invoice: Partial<InsertInvoice>): Promise<Invoice | undefined> {
+    const existingInvoice = this.invoices.get(id);
+    if (!existingInvoice) return undefined;
+    
+    const updatedInvoice: Invoice = { ...existingInvoice, ...invoice };
+    this.invoices.set(id, updatedInvoice);
+    return updatedInvoice;
+  }
+
+  async getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
+    return Array.from(this.invoiceItems.values()).filter(item => item.invoiceId === invoiceId);
+  }
+
+  async createInvoiceItem(item: InsertInvoiceItem): Promise<InvoiceItem> {
+    const id = this.invoiceItemId++;
+    const newItem: InvoiceItem = {
+      id,
+      invoiceId: item.invoiceId,
+      productId: item.productId,
+      description: item.description,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      hsnCode: item.hsnCode || null,
+      gstRate: item.gstRate,
+      cgstRate: item.cgstRate || 0,
+      sgstRate: item.sgstRate || 0,
+      igstRate: item.igstRate || 0,
+      amount: item.amount,
+      totalAmount: item.totalAmount
+    };
+    
+    this.invoiceItems.set(id, newItem);
+    return newItem;
+  }
+
+  // ***** New methods for Price Revaluation *****
+
+  async getPriceRevaluations(productId?: number, startDate?: Date, endDate?: Date): Promise<PriceRevaluation[]> {
+    let revaluations = Array.from(this.priceRevaluations.values());
+    
+    if (productId) {
+      revaluations = revaluations.filter(rev => rev.productId === productId);
+    }
+    
+    if (startDate) {
+      revaluations = revaluations.filter(rev => rev.revaluationDate >= startDate);
+    }
+    
+    if (endDate) {
+      revaluations = revaluations.filter(rev => rev.revaluationDate <= endDate);
+    }
+    
+    return revaluations;
+  }
+
+  async createPriceRevaluation(revaluation: InsertPriceRevaluation): Promise<PriceRevaluation> {
+    const id = this.priceRevaluationId++;
+    
+    // Get the product for updating its price
+    const product = this.products.get(revaluation.productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+    
+    // Create the revaluation record
+    const newRevaluation: PriceRevaluation = {
+      id,
+      productId: revaluation.productId,
+      oldPrice: revaluation.oldPrice,
+      newPrice: revaluation.newPrice,
+      revaluationDate: new Date(),
+      reason: revaluation.reason,
+      userId: revaluation.userId
+    };
+    
+    // Update the product price
+    this.updateProduct(product.id, { 
+      unitPrice: revaluation.newPrice,
+      lastPriceUpdate: new Date()
+    });
+    
+    this.priceRevaluations.set(id, newRevaluation);
+    return newRevaluation;
+  }
+
+  // ***** New methods for Payment Tracking *****
+
+  async getPayments(entityType?: string, status?: string): Promise<Payment[]> {
+    let payments = Array.from(this.payments.values());
+    
+    if (entityType) {
+      payments = payments.filter(payment => payment.entityType === entityType);
+    }
+    
+    return payments;
+  }
+
+  async createPayment(payment: InsertPayment): Promise<Payment> {
+    const id = this.paymentId++;
+    const newPayment: Payment = {
+      id,
+      entityType: payment.entityType,
+      entityId: payment.entityId,
+      amount: payment.amount,
+      paymentDate: new Date(),
+      paymentMethod: payment.paymentMethod,
+      reference: payment.reference || null,
+      notes: payment.notes || null
+    };
+    
+    // Update the payment status of the entity
+    if (payment.entityType === 'invoice') {
+      const invoice = this.invoices.get(payment.entityId);
+      if (invoice) {
+        const totalPaid = Array.from(this.payments.values())
+          .filter(p => p.entityType === 'invoice' && p.entityId === payment.entityId)
+          .reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+        
+        let newStatus = 'unpaid';
+        if (totalPaid >= invoice.totalAmount) {
+          newStatus = 'paid';
+        } else if (totalPaid > 0) {
+          newStatus = 'partial';
+        }
+        
+        this.updateInvoice(payment.entityId, { status: newStatus });
+      }
+    } else if (payment.entityType === 'supplierOrder') {
+      const order = this.supplierOrders.get(payment.entityId);
+      if (order && order.totalAmount) {
+        const totalPaid = Array.from(this.payments.values())
+          .filter(p => p.entityType === 'supplierOrder' && p.entityId === payment.entityId)
+          .reduce((sum, p) => sum + p.amount, 0) + payment.amount;
+        
+        let newStatus = 'pending';
+        if (totalPaid >= order.totalAmount) {
+          newStatus = 'paid';
+        } else if (totalPaid > 0) {
+          newStatus = 'partial';
+        }
+        
+        this.updateSupplierOrder(payment.entityId, { 
+          paymentStatus: newStatus,
+          paidAmount: totalPaid
+        });
+      }
+    }
+    
+    this.payments.set(id, newPayment);
+    return newPayment;
+  }
+
+  async updatePayment(id: number, payment: Partial<InsertPayment>): Promise<Payment | undefined> {
+    const existingPayment = this.payments.get(id);
+    if (!existingPayment) return undefined;
+    
+    const updatedPayment: Payment = { ...existingPayment, ...payment };
+    this.payments.set(id, updatedPayment);
+    return updatedPayment;
+  }
+
+  // ***** New composite operations *****
+
+  async getInvoiceWithItems(invoiceId: number): Promise<InvoiceWithItems | undefined> {
+    const invoice = this.invoices.get(invoiceId);
+    if (!invoice) return undefined;
+    
+    const items = Array.from(this.invoiceItems.values())
+      .filter(item => item.invoiceId === invoiceId);
+    
+    // Add product names to the items
+    const itemsWithProductNames = await Promise.all(items.map(async item => {
+      const product = this.products.get(item.productId);
+      return {
+        ...item,
+        productName: product ? product.name : 'Unknown Product'
+      };
+    }));
+    
+    // Get location details
+    const location = this.locations.get(invoice.locationId);
+    const locationDetails = location ? {
+      name: location.name,
+      address: location.address,
+      stateCode: location.stateCode
+    } : undefined;
+    
+    return {
+      invoice: {
+        ...invoice,
+        locationDetails
+      },
+      items: itemsWithProductNames
+    };
+  }
+
+  async getPaymentSummary(): Promise<PaymentSummary> {
+    const today = new Date();
+    
+    // Get upcoming invoice payments (to receive)
+    const unpaidInvoices = Array.from(this.invoices.values())
+      .filter(inv => inv.status !== 'paid' && inv.dueDate !== null);
+    
+    // Get upcoming supplier order payments (to pay)
+    const unpaidOrders = Array.from(this.supplierOrders.values())
+      .filter(order => order.paymentStatus !== 'paid' && order.paymentDueDate !== null);
+    
+    const upcoming = [
+      ...unpaidInvoices.map(inv => ({
+        id: inv.id,
+        entityType: 'invoice',
+        entityName: inv.customerName,
+        amount: inv.totalAmount - (Array.from(this.payments.values())
+          .filter(p => p.entityType === 'invoice' && p.entityId === inv.id)
+          .reduce((sum, p) => sum + p.amount, 0)),
+        dueDate: inv.dueDate as Date,
+        daysRemaining: Math.ceil((inv.dueDate as Date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+        status: inv.status
+      })),
+      ...unpaidOrders.map(order => ({
+        id: order.id,
+        entityType: 'supplierOrder',
+        entityName: (() => {
+          const supplier = this.suppliers.get(order.supplierId);
+          return supplier ? supplier.name : 'Unknown Supplier';
+        })(),
+        amount: (order.totalAmount || 0) - (order.paidAmount || 0),
+        dueDate: order.paymentDueDate as Date,
+        daysRemaining: Math.ceil((order.paymentDueDate as Date).getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+        status: order.paymentStatus || 'pending'
+      }))
+    ];
+    
+    // Calculate totals
+    const toPay = unpaidOrders.reduce((sum, order) => sum + ((order.totalAmount || 0) - (order.paidAmount || 0)), 0);
+    const toReceive = unpaidInvoices.reduce((sum, inv) => {
+      const paidAmount = Array.from(this.payments.values())
+        .filter(p => p.entityType === 'invoice' && p.entityId === inv.id)
+        .reduce((sum, p) => sum + p.amount, 0);
+      return sum + (inv.totalAmount - paidAmount);
+    }, 0);
+    
+    // Count overdue items
+    const overdueCount = upcoming.filter(item => item.daysRemaining < 0).length;
+    
+    return {
+      upcoming,
+      toPay,
+      toReceive,
+      overdueCount
+    };
+  }
+
+  async getGstSummary(month: number, year: number): Promise<GstSummary> {
+    // Define the date range for the given month and year
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0); // Last day of month
+    
+    // Get all invoices within the date range
+    const periodInvoices = Array.from(this.invoices.values())
+      .filter(inv => inv.invoiceDate >= startDate && inv.invoiceDate <= endDate);
+    
+    // Get all supplier orders within the date range
+    const periodOrders = Array.from(this.supplierOrders.values())
+      .filter(order => order.orderDate >= startDate && order.orderDate <= endDate);
+    
+    // Calculate outward GST (sales)
+    const outwardTaxableAmount = periodInvoices.reduce((sum, inv) => sum + inv.subtotal, 0);
+    const outwardCgst = periodInvoices.reduce((sum, inv) => sum + inv.cgstAmount, 0);
+    const outwardSgst = periodInvoices.reduce((sum, inv) => sum + inv.sgstAmount, 0);
+    const outwardIgst = periodInvoices.reduce((sum, inv) => sum + inv.igstAmount, 0);
+    const outwardTotal = outwardCgst + outwardSgst + outwardIgst;
+    
+    // Calculate inward GST (purchases)
+    let inwardTaxableAmount = 0;
+    let inwardCgst = 0;
+    let inwardSgst = 0;
+    let inwardIgst = 0;
+    
+    // This is estimated as we don't have GST details for orders directly
+    for (const order of periodOrders) {
+      if (!order.totalAmount) continue;
+      
+      // Estimate GST amounts from order items
+      const items = Array.from(this.orderItems.values())
+        .filter(item => item.orderId === order.id);
+      
+      for (const item of items) {
+        const product = this.products.get(item.productId);
+        const gstRate = item.gstRate || (product?.gstRate || 18); // Default to 18%
+        
+        const itemSubtotal = item.quantity * item.unitPrice;
+        inwardTaxableAmount += itemSubtotal;
+        
+        // Check if supplier is inter-state
+        const supplier = this.suppliers.get(order.supplierId);
+        const orderLocation = await this.getLocation(1); // Default warehouse
+        const isInterState = supplier?.stateCode && orderLocation?.stateCode && 
+                             supplier.stateCode !== orderLocation.stateCode;
+        
+        if (isInterState) {
+          inwardIgst += itemSubtotal * (gstRate / 100);
+        } else {
+          const halfGst = itemSubtotal * (gstRate / 200); // Divide by 2 for CGST/SGST
+          inwardCgst += halfGst;
+          inwardSgst += halfGst;
+        }
+      }
+    }
+    
+    const inwardTotal = inwardCgst + inwardSgst + inwardIgst;
+    
+    // Calculate net tax
+    const netCgst = outwardCgst - inwardCgst;
+    const netSgst = outwardSgst - inwardSgst;
+    const netIgst = outwardIgst - inwardIgst;
+    const netTotal = netCgst + netSgst + netIgst;
+    
+    // Get month name
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    
+    return {
+      month: monthNames[month - 1],
+      year,
+      outwardSupplies: {
+        taxableAmount: outwardTaxableAmount,
+        cgst: outwardCgst,
+        sgst: outwardSgst,
+        igst: outwardIgst,
+        total: outwardTotal
+      },
+      inwardSupplies: {
+        taxableAmount: inwardTaxableAmount,
+        cgst: inwardCgst,
+        sgst: inwardSgst,
+        igst: inwardIgst,
+        total: inwardTotal
+      },
+      netTax: {
+        cgst: netCgst,
+        sgst: netSgst,
+        igst: netIgst,
+        total: netTotal
+      }
+    };
+  }
+
+  async calculateGstForItem(unitPrice: number, quantity: number, gstRate: number, isInterState: boolean): Promise<{
+    subtotal: number;
+    cgst: number;
+    sgst: number;
+    igst: number;
+    total: number;
+  }> {
+    const subtotal = unitPrice * quantity;
+    let cgst = 0;
+    let sgst = 0;
+    let igst = 0;
+    
+    if (isInterState) {
+      // For inter-state sales, only IGST applies
+      igst = subtotal * (gstRate / 100);
+    } else {
+      // For intra-state sales, CGST and SGST applies
+      cgst = subtotal * (gstRate / 200); // Half rate for CGST
+      sgst = subtotal * (gstRate / 200); // Half rate for SGST
+    }
+    
+    const total = subtotal + cgst + sgst + igst;
+    
+    return {
+      subtotal,
+      cgst,
+      sgst,
+      igst,
+      total
+    };
   }
 }
 
