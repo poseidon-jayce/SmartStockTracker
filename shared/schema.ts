@@ -22,6 +22,8 @@ export const locations = pgTable("locations", {
   name: text("name").notNull(),
   address: text("address"),
   type: text("type").notNull(), // warehouse, store, etc.
+  // Added for GST
+  stateCode: text("state_code"), // State code for IGST determination
 });
 
 export const insertLocationSchema = createInsertSchema(locations).omit({
@@ -39,10 +41,16 @@ export const products = pgTable("products", {
   unitPrice: real("unit_price").notNull(),
   reorderPoint: integer("reorder_point").notNull(),
   imageUrl: text("image_url"),
+  // Added for GST and price revaluation
+  hsnCode: text("hsn_code"), // HSN code for GST
+  gstRate: real("gst_rate"), // GST rate (percentage)
+  lastPriceUpdate: timestamp("last_price_update"),
+  originalCost: real("original_cost"), // Original cost for tracking price changes
 });
 
 export const insertProductSchema = createInsertSchema(products).omit({
   id: true,
+  lastPriceUpdate: true,
 });
 
 // Inventory
@@ -68,6 +76,10 @@ export const suppliers = pgTable("suppliers", {
   phone: text("phone"),
   address: text("address"),
   active: boolean("active").notNull().default(true),
+  // Added for GST
+  gstNumber: text("gst_number"), // GSTIN
+  panNumber: text("pan_number"), // PAN for taxation
+  stateCode: text("state_code"), // For IGST determination
 });
 
 export const insertSupplierSchema = createInsertSchema(suppliers).omit({
@@ -95,11 +107,17 @@ export const supplierOrders = pgTable("supplier_orders", {
   status: text("status").notNull().default("pending"), // pending, confirmed, shipped, delivered, canceled
   expectedDelivery: timestamp("expected_delivery"),
   notes: text("notes"),
+  // Added for payment tracking
+  paymentStatus: text("payment_status").default("pending"), // pending, partial, paid
+  paymentDueDate: timestamp("payment_due_date"),
+  totalAmount: real("total_amount"),
+  paidAmount: real("paid_amount").default(0),
 });
 
 export const insertSupplierOrderSchema = createInsertSchema(supplierOrders).omit({
   id: true,
   orderDate: true,
+  paidAmount: true,
 });
 
 // Order items
@@ -109,6 +127,9 @@ export const orderItems = pgTable("order_items", {
   productId: integer("product_id").notNull(),
   quantity: integer("quantity").notNull(),
   unitPrice: real("unit_price").notNull(),
+  // Added for GST
+  hsnCode: text("hsn_code"),
+  gstRate: real("gst_rate"),
 });
 
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({
@@ -123,6 +144,8 @@ export const sales = pgTable("sales", {
   productId: integer("product_id").notNull(),
   quantity: integer("quantity").notNull(),
   unitPrice: real("unit_price").notNull(),
+  // Link to invoice if applicable
+  invoiceId: integer("invoice_id"),
 });
 
 export const insertSalesSchema = createInsertSchema(sales).omit({
@@ -144,6 +167,87 @@ export const predictions = pgTable("predictions", {
 export const insertPredictionSchema = createInsertSchema(predictions).omit({
   id: true,
   generatedAt: true,
+});
+
+// New tables for the requested features
+
+// Invoices (for GST compliance and printing)
+export const invoices = pgTable("invoices", {
+  id: serial("id").primaryKey(),
+  invoiceNumber: text("invoice_number").notNull().unique(),
+  customerName: text("customer_name").notNull(),
+  customerAddress: text("customer_address"),
+  customerGstin: text("customer_gstin"),
+  customerStateCode: text("customer_state_code"),
+  invoiceDate: timestamp("invoice_date").notNull().defaultNow(),
+  dueDate: timestamp("due_date"),
+  locationId: integer("location_id").notNull(), // From which location
+  subtotal: real("subtotal").notNull(),
+  cgstAmount: real("cgst_amount").default(0),
+  sgstAmount: real("sgst_amount").default(0),
+  igstAmount: real("igst_amount").default(0),
+  totalAmount: real("total_amount").notNull(),
+  status: text("status").notNull().default("unpaid"), // unpaid, partial, paid
+  notes: text("notes"),
+});
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  invoiceDate: true,
+});
+
+// Invoice Items
+export const invoiceItems = pgTable("invoice_items", {
+  id: serial("id").primaryKey(),
+  invoiceId: integer("invoice_id").notNull(),
+  productId: integer("product_id").notNull(),
+  description: text("description").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPrice: real("unit_price").notNull(),
+  hsnCode: text("hsn_code"),
+  gstRate: real("gst_rate").notNull(),
+  cgstRate: real("cgst_rate").default(0),
+  sgstRate: real("sgst_rate").default(0),
+  igstRate: real("igst_rate").default(0),
+  amount: real("amount").notNull(), // Pre-tax amount
+  totalAmount: real("total_amount").notNull(), // Including tax
+});
+
+export const insertInvoiceItemSchema = createInsertSchema(invoiceItems).omit({
+  id: true,
+});
+
+// Price Revaluations
+export const priceRevaluations = pgTable("price_revaluations", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  oldPrice: real("old_price").notNull(),
+  newPrice: real("new_price").notNull(),
+  revaluationDate: timestamp("revaluation_date").notNull().defaultNow(),
+  reason: text("reason").notNull(),
+  userId: integer("user_id").notNull(), // Who performed the change
+});
+
+export const insertPriceRevaluationSchema = createInsertSchema(priceRevaluations).omit({
+  id: true,
+  revaluationDate: true,
+});
+
+// Payments
+export const payments = pgTable("payments", {
+  id: serial("id").primaryKey(),
+  entityType: text("entity_type").notNull(), // "invoice" or "supplierOrder"
+  entityId: integer("entity_id").notNull(),
+  amount: real("amount").notNull(),
+  paymentDate: timestamp("payment_date").notNull().defaultNow(),
+  paymentMethod: text("payment_method").notNull(), // cash, bank transfer, etc.
+  reference: text("reference"), // Reference number
+  notes: text("notes"),
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  paymentDate: true,
 });
 
 // Type exports
@@ -177,20 +281,35 @@ export type InsertSale = z.infer<typeof insertSalesSchema>;
 export type Prediction = typeof predictions.$inferSelect;
 export type InsertPrediction = z.infer<typeof insertPredictionSchema>;
 
+export type Invoice = typeof invoices.$inferSelect;
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+
+export type InvoiceItem = typeof invoiceItems.$inferSelect;
+export type InsertInvoiceItem = z.infer<typeof insertInvoiceItemSchema>;
+
+export type PriceRevaluation = typeof priceRevaluations.$inferSelect;
+export type InsertPriceRevaluation = z.infer<typeof insertPriceRevaluationSchema>;
+
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
+
 // Extended schemas for joined data
 export const productWithInventorySchema = z.object({
   id: z.number(),
   name: z.string(),
   sku: z.string(),
-  barcode: z.string().optional(),
+  barcode: z.string().optional().nullable(),
   category: z.string(),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   unitPrice: z.number(),
   reorderPoint: z.number(),
-  imageUrl: z.string().optional(),
+  imageUrl: z.string().optional().nullable(),
   quantity: z.number(),
   locationId: z.number(),
   status: z.enum(['Low Stock', 'Medium Stock', 'In Stock']),
+  // Added for GST
+  hsnCode: z.string().optional().nullable(),
+  gstRate: z.number().optional().nullable(),
 });
 
 export type ProductWithInventory = z.infer<typeof productWithInventorySchema>;
@@ -226,3 +345,91 @@ export const supplierActivitySchema = z.object({
 });
 
 export type SupplierActivity = z.infer<typeof supplierActivitySchema>;
+
+// New composite types for the requested features
+
+export const invoiceWithItemsSchema = z.object({
+  invoice: z.object({
+    id: z.number(),
+    invoiceNumber: z.string(),
+    customerName: z.string(),
+    customerAddress: z.string().nullable().optional(),
+    customerGstin: z.string().nullable().optional(),
+    customerStateCode: z.string().nullable().optional(),
+    invoiceDate: z.date(),
+    dueDate: z.date().nullable().optional(),
+    subtotal: z.number(),
+    cgstAmount: z.number(),
+    sgstAmount: z.number(),
+    igstAmount: z.number(),
+    totalAmount: z.number(),
+    status: z.string(),
+    notes: z.string().nullable().optional(),
+    locationDetails: z.object({
+      name: z.string(),
+      address: z.string().nullable().optional(),
+      stateCode: z.string().nullable().optional(),
+    }).optional(),
+  }),
+  items: z.array(z.object({
+    id: z.number(),
+    productId: z.number(),
+    productName: z.string(),
+    description: z.string(),
+    quantity: z.number(),
+    unitPrice: z.number(),
+    hsnCode: z.string().nullable().optional(),
+    gstRate: z.number(),
+    cgstRate: z.number().optional(),
+    sgstRate: z.number().optional(),
+    igstRate: z.number().optional(),
+    amount: z.number(),
+    totalAmount: z.number(),
+  })),
+});
+
+export type InvoiceWithItems = z.infer<typeof invoiceWithItemsSchema>;
+
+export const paymentSummarySchema = z.object({
+  upcoming: z.array(z.object({
+    id: z.number(),
+    entityType: z.string(),
+    entityName: z.string(),
+    amount: z.number(),
+    dueDate: z.date(),
+    daysRemaining: z.number(),
+    status: z.string(),
+  })),
+  toPay: z.number(),
+  toReceive: z.number(),
+  overdueCount: z.number(),
+});
+
+export type PaymentSummary = z.infer<typeof paymentSummarySchema>;
+
+export const gstSummarySchema = z.object({
+  month: z.string(),
+  year: z.number(),
+  outwardSupplies: z.object({
+    taxableAmount: z.number(),
+    cgst: z.number(),
+    sgst: z.number(),
+    igst: z.number(),
+    total: z.number(),
+  }),
+  inwardSupplies: z.object({
+    taxableAmount: z.number(),
+    cgst: z.number(),
+    sgst: z.number(),
+    igst: z.number(),
+    total: z.number(),
+  }),
+  netTax: z.object({
+    cgst: z.number(),
+    sgst: z.number(),
+    igst: z.number(),
+    total: z.number(),
+  }),
+});
+
+export type GstSummary = z.infer<typeof gstSummarySchema>;

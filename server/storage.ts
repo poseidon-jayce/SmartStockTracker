@@ -21,7 +21,19 @@ import {
   InsertPrediction,
   ProductWithInventory,
   PredictionWithProduct,
-  SupplierActivity
+  SupplierActivity,
+  // New types for tax, invoice, payments, and price revaluation
+  Invoice,
+  InvoiceItem,
+  InsertInvoice,
+  InsertInvoiceItem,
+  InvoiceWithItems,
+  Payment,
+  InsertPayment,
+  PaymentSummary,
+  PriceRevaluation,
+  InsertPriceRevaluation,
+  GstSummary
 } from "@shared/schema";
 
 export interface IStorage {
