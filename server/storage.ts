@@ -690,9 +690,14 @@ export class MemStorage implements IStorage {
     const inventoryItems = await this.getInventory(locationId);
     const products = await this.getProducts();
     
-    return inventoryItems.map(inv => {
+    const result: ProductWithInventory[] = [];
+    
+    for (const inv of inventoryItems) {
       const product = products.find(p => p.id === inv.productId);
-      if (!product) throw new Error(`Product not found for inventory item: ${inv.id}`);
+      if (!product) {
+        console.error(`Product not found for inventory item: ${inv.id}`);
+        continue; // Skip this item instead of throwing an error
+      }
       
       let status = 'In Stock';
       if (inv.quantity <= product.reorderPoint * 0.5) {
@@ -701,7 +706,7 @@ export class MemStorage implements IStorage {
         status = 'Medium Stock';
       }
       
-      return {
+      result.push({
         id: product.id,
         name: product.name,
         sku: product.sku,
@@ -714,8 +719,10 @@ export class MemStorage implements IStorage {
         quantity: inv.quantity,
         locationId: inv.locationId,
         status: status as 'Low Stock' | 'Medium Stock' | 'In Stock'
-      };
-    });
+      });
+    }
+    
+    return result;
   }
   
   async getPredictionsWithProducts(locationId?: number): Promise<PredictionWithProduct[]> {
@@ -723,9 +730,14 @@ export class MemStorage implements IStorage {
     const products = await this.getProducts();
     const inventoryItems = await this.getInventory(locationId);
     
-    return predictions.map(pred => {
+    const result: PredictionWithProduct[] = [];
+    
+    for (const pred of predictions) {
       const product = products.find(p => p.id === pred.productId);
-      if (!product) throw new Error(`Product not found for prediction: ${pred.id}`);
+      if (!product) {
+        console.error(`Product not found for prediction: ${pred.id}`);
+        continue; // Skip this item instead of throwing an error
+      }
       
       const inventory = inventoryItems.find(i => 
         i.productId === pred.productId && 
@@ -742,7 +754,7 @@ export class MemStorage implements IStorage {
         status = 'Medium Stock';
       }
       
-      return {
+      result.push({
         id: pred.id,
         productId: product.id,
         productName: product.name,
@@ -753,8 +765,10 @@ export class MemStorage implements IStorage {
         recommendedOrder,
         confidence: pred.confidence,
         status: status as 'Low Stock' | 'Medium Stock' | 'In Stock'
-      };
-    });
+      });
+    }
+    
+    return result;
   }
   
   async getSupplierActivity(): Promise<SupplierActivity> {
@@ -763,17 +777,22 @@ export class MemStorage implements IStorage {
     
     // Pending responses - suppliers with pending orders
     const pendingOrders = orders.filter(order => order.status === 'pending');
-    const pending = pendingOrders.map(order => {
+    const pending: { id: number; name: string; requestedAgo: string }[] = [];
+    
+    for (const order of pendingOrders) {
       const supplier = suppliers.find(s => s.id === order.supplierId);
-      if (!supplier) throw new Error(`Supplier not found for order: ${order.id}`);
+      if (!supplier) {
+        console.error(`Supplier not found for order: ${order.id}`);
+        continue; // Skip this item instead of throwing an error
+      }
       
       const daysAgo = Math.floor((Date.now() - order.orderDate.getTime()) / (1000 * 60 * 60 * 24));
-      return {
+      pending.push({
         id: supplier.id,
         name: supplier.name,
         requestedAgo: daysAgo === 0 ? 'Today' : `${daysAgo} ${daysAgo === 1 ? 'day' : 'days'} ago`
-      };
-    });
+      });
+    }
     
     // Recent updates
     const recentOrders = orders
@@ -781,9 +800,14 @@ export class MemStorage implements IStorage {
       .sort((a, b) => b.orderDate.getTime() - a.orderDate.getTime())
       .slice(0, 3);
     
-    const updates = recentOrders.map(order => {
+    const updates: { id: number; name: string; action: string; orderNumber: string; timestamp: string }[] = [];
+    
+    for (const order of recentOrders) {
       const supplier = suppliers.find(s => s.id === order.supplierId);
-      if (!supplier) throw new Error(`Supplier not found for order: ${order.id}`);
+      if (!supplier) {
+        console.error(`Supplier not found for order: ${order.id}`);
+        continue; // Skip this item instead of throwing an error
+      }
       
       let action = '';
       switch (order.status) {
@@ -816,14 +840,14 @@ export class MemStorage implements IStorage {
         timestamp = `${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
       }
       
-      return {
+      updates.push({
         id: supplier.id,
         name: supplier.name,
         action,
         orderNumber: `#${order.id + 4470}`,
         timestamp
-      };
-    });
+      });
+    }
     
     return { pending, updates };
   }
@@ -834,27 +858,38 @@ export class MemStorage implements IStorage {
     pendingOrders: number;
     activeSuppliers: number;
   }> {
-    const inventoryItems = await this.getInventoryWithProducts(locationId);
-    const orders = await this.getSupplierOrders();
-    const suppliers = await this.getSuppliers();
-    
-    const totalValue = inventoryItems.reduce((sum, item) => 
-      sum + (item.quantity * item.unitPrice), 0);
-    
-    const lowStockCount = inventoryItems.filter(item => 
-      item.status === 'Low Stock' || item.status === 'Medium Stock').length;
-    
-    const pendingOrders = orders.filter(order => 
-      order.status === 'pending' || order.status === 'confirmed').length;
-    
-    const activeSuppliers = suppliers.filter(supplier => supplier.active).length;
-    
-    return {
-      totalValue,
-      lowStockCount,
-      pendingOrders,
-      activeSuppliers
-    };
+    try {
+      const inventoryItems = await this.getInventoryWithProducts(locationId);
+      const orders = await this.getSupplierOrders();
+      const suppliers = await this.getSuppliers();
+      
+      const totalValue = inventoryItems.reduce((sum, item) => 
+        sum + (item.quantity * item.unitPrice), 0);
+      
+      const lowStockCount = inventoryItems.filter(item => 
+        item.status === 'Low Stock' || item.status === 'Medium Stock').length;
+      
+      const pendingOrders = orders.filter(order => 
+        order.status === 'pending' || order.status === 'confirmed').length;
+      
+      const activeSuppliers = suppliers.filter(supplier => supplier.active).length;
+      
+      return {
+        totalValue,
+        lowStockCount,
+        pendingOrders,
+        activeSuppliers
+      };
+    } catch (error) {
+      console.error("Error getting inventory stats:", error);
+      // Return default values instead of throwing an error
+      return {
+        totalValue: 0,
+        lowStockCount: 0,
+        pendingOrders: 0,
+        activeSuppliers: 0
+      };
+    }
   }
 }
 
