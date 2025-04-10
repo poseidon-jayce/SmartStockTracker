@@ -319,55 +319,102 @@ export class MemStorage implements IStorage {
       
       // Headphones sales - trending up
       if (i % 3 === 0) {
-        this.createSale({
+        // Create sales record
+        const sale: InsertSale = {
           locationId: store1.id,
           productId: headphones.id,
           quantity: Math.floor(Math.random() * 3) + 1,
-          unitPrice: 299.99,
-          date
-        });
+          unitPrice: 299.99
+        };
+        
+        // Use direct set to bypass createSale method for initialization
+        const saleId = this.saleId++;
+        const saleObj: Sale = {
+          ...sale,
+          id: saleId,
+          date: date
+        };
+        this.sales.set(saleId, saleObj);
       }
       
       // Smart Hub sales - consistent
       if (i % 2 === 0) {
-        this.createSale({
+        // Create sales record
+        const sale: InsertSale = {
           locationId: store1.id,
           productId: smarthub.id,
           quantity: Math.floor(Math.random() * 2) + 1,
-          unitPrice: 129.99,
-          date
-        });
+          unitPrice: 129.99
+        };
+        
+        // Use direct set to bypass createSale method for initialization
+        const saleId = this.saleId++;
+        const saleObj: Sale = {
+          ...sale,
+          id: saleId,
+          date: date
+        };
+        this.sales.set(saleId, saleObj);
       }
       
       // Camera sales - seasonal
       if (i > 20 && i % 2 === 0) {
-        this.createSale({
+        // Create sales record
+        const sale: InsertSale = {
           locationId: store2.id,
           productId: camera.id,
           quantity: Math.floor(Math.random() * 2) + 1,
-          unitPrice: 249.99,
-          date
-        });
+          unitPrice: 249.99
+        };
+        
+        // Use direct set to bypass createSale method for initialization
+        const saleId = this.saleId++;
+        const saleObj: Sale = {
+          ...sale,
+          id: saleId,
+          date: date
+        };
+        this.sales.set(saleId, saleObj);
       }
       
       // Watch sales - very popular
-      this.createSale({
-        locationId: store2.id,
-        productId: watch.id,
-        quantity: Math.floor(Math.random() * 5) + 1,
-        unitPrice: 89.99,
-        date
-      });
+      {
+        // Create sales record
+        const sale: InsertSale = {
+          locationId: store2.id,
+          productId: watch.id,
+          quantity: Math.floor(Math.random() * 5) + 1,
+          unitPrice: 89.99
+        };
+        
+        // Use direct set to bypass createSale method for initialization
+        const saleId = this.saleId++;
+        const saleObj: Sale = {
+          ...sale,
+          id: saleId,
+          date: date
+        };
+        this.sales.set(saleId, saleObj);
+      }
       
       // Tablet sales - moderate
       if (i % 4 === 0) {
-        this.createSale({
+        // Create sales record
+        const sale: InsertSale = {
           locationId: store1.id,
           productId: tablet.id,
           quantity: 1,
-          unitPrice: 499.99,
-          date
-        });
+          unitPrice: 499.99
+        };
+        
+        // Use direct set to bypass createSale method for initialization
+        const saleId = this.saleId++;
+        const saleObj: Sale = {
+          ...sale,
+          id: saleId,
+          date: date
+        };
+        this.sales.set(saleId, saleObj);
       }
     }
     
@@ -437,7 +484,14 @@ export class MemStorage implements IStorage {
   
   async createUser(user: InsertUser): Promise<User> {
     const id = this.userId++;
-    const newUser: User = { ...user, id };
+    const newUser: User = { 
+      id,
+      username: user.username,
+      password: user.password,
+      fullName: user.fullName,
+      role: user.role || 'user',
+      locationId: user.locationId || null
+    };
     this.users.set(id, newUser);
     return newUser;
   }
@@ -461,7 +515,17 @@ export class MemStorage implements IStorage {
   
   async createProduct(product: InsertProduct): Promise<Product> {
     const id = this.productId++;
-    const newProduct: Product = { ...product, id };
+    const newProduct: Product = { 
+      id,
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode || null,
+      category: product.category,
+      description: product.description || null,
+      unitPrice: product.unitPrice,
+      reorderPoint: product.reorderPoint,
+      imageUrl: product.imageUrl || null
+    };
     this.products.set(id, newProduct);
     return newProduct;
   }
@@ -490,7 +554,12 @@ export class MemStorage implements IStorage {
   
   async createLocation(location: InsertLocation): Promise<Location> {
     const id = this.locationId++;
-    const newLocation: Location = { ...location, id };
+    const newLocation: Location = { 
+      id,
+      name: location.name,
+      type: location.type,
+      address: location.address || null
+    };
     this.locations.set(id, newLocation);
     return newLocation;
   }
@@ -537,8 +606,10 @@ export class MemStorage implements IStorage {
   async createInventory(inventory: InsertInventory): Promise<Inventory> {
     const id = this.inventoryId++;
     const newInventory: Inventory = { 
-      ...inventory, 
-      id, 
+      id,
+      locationId: inventory.locationId,
+      productId: inventory.productId,
+      quantity: inventory.quantity,
       lastUpdated: new Date() 
     };
     this.inventory.set(id, newInventory);
@@ -556,7 +627,15 @@ export class MemStorage implements IStorage {
   
   async createSupplier(supplier: InsertSupplier): Promise<Supplier> {
     const id = this.supplierId++;
-    const newSupplier: Supplier = { ...supplier, id };
+    const newSupplier: Supplier = { 
+      id,
+      name: supplier.name,
+      address: supplier.address || null,
+      contactName: supplier.contactName || null,
+      email: supplier.email || null,
+      phone: supplier.phone || null,
+      active: supplier.active !== undefined ? supplier.active : true
+    };
     this.suppliers.set(id, newSupplier);
     return newSupplier;
   }
@@ -651,9 +730,12 @@ export class MemStorage implements IStorage {
   async createSale(sale: InsertSale): Promise<Sale> {
     const id = this.saleId++;
     const newSale: Sale = { 
-      ...sale, 
-      id, 
-      date: sale.date || new Date() 
+      id,
+      locationId: sale.locationId,
+      productId: sale.productId,
+      quantity: sale.quantity,
+      unitPrice: sale.unitPrice,
+      date: new Date()
     };
     this.sales.set(id, newSale);
     return newSale;
