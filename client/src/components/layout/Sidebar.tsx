@@ -9,7 +9,11 @@ import {
   Store,
   Settings,
   Users,
-  HelpCircle
+  HelpCircle,
+  Receipt,
+  Calculator,
+  CreditCard,
+  Tag
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -55,6 +59,29 @@ export default function Sidebar({ isOpen }: SidebarProps) {
       title: 'Locations',
       icon: <Store className="mr-3 h-5 w-5" />,
       href: '/locations'
+    }
+  ];
+  
+  const financialNavItems: NavItem[] = [
+    {
+      title: 'Invoices',
+      icon: <Receipt className="mr-3 h-5 w-5" />,
+      href: '/invoices'
+    },
+    {
+      title: 'GST Reports',
+      icon: <Calculator className="mr-3 h-5 w-5" />,
+      href: '/gst-reports'
+    },
+    {
+      title: 'Payments',
+      icon: <CreditCard className="mr-3 h-5 w-5" />,
+      href: '/payments'
+    },
+    {
+      title: 'Price Revaluation',
+      icon: <Tag className="mr-3 h-5 w-5" />,
+      href: '/price-revaluation'
     }
   ];
 
@@ -110,6 +137,15 @@ export default function Sidebar({ isOpen }: SidebarProps) {
           <p className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-4">Main Menu</p>
           <ul className="space-y-2">
             {mainNavItems.map((item) => (
+              <NavItem key={item.href} item={item} />
+            ))}
+          </ul>
+        </div>
+        
+        <div className="mb-8">
+          <p className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider mb-4">Financial</p>
+          <ul className="space-y-2">
+            {financialNavItems.map((item) => (
               <NavItem key={item.href} item={item} />
             ))}
           </ul>
